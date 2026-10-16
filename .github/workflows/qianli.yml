@@ -27,11 +27,11 @@ jobs:
       - name: 安装依赖
         run: python -m pip install -r requirements.txt
 
-      - name: 从 Release 下载数据
+      - name: 从最新 Release 下载数据
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download Data-v1 \
+          gh release download \
             --repo "$GITHUB_REPOSITORY" \
             --pattern "ths_daily_cache.json" \
             --pattern "all_daily_cache.json" \
