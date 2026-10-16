@@ -10,7 +10,9 @@ import json
 import math
 import os
 import sys
+import webbrowser
 from collections import Counter, defaultdict
+from pathlib import Path
 
 import numpy as np
 import requests
@@ -185,19 +187,21 @@ def save_html_report(path, date, candidates):
     rows = []
     for i, r in enumerate(candidates, 1):
         p = r["prob"]
-        best_h, best_p = max(p.items(), key=lambda z: z[1])
+        best_h, best_p = max(p.items(), key=lambda z: float(z[1]))
+        prob_path = "　｜　".join(f"{h}板：{prob:.0%}" for h, prob in sorted(p.items(), key=lambda z: int(z[0])))
         cells = [
-            i, r.get("name") or "", r.get("code") or "", f"{r['stage']}板",
+            i, r.get("code") or "", f"{r['stage']}板",
             f"{r['theme_max_board']}板", f"{r['score']:.1%}",
             f"{r['expected_max_board']:.1f}板", f"{best_h}板 ({best_p:.0%})",
             f"{r['features'].get('turnover_rate', 0):.1f}%", r.get("reason") or "",
         ]
         cls = "top" if i <= 3 else ""
-        rows.append(
-            f'<tr class="{cls}">' + "".join(
-                f"<td>{html.escape(str(v))}</td>" for v in cells
-            ) + "</tr>"
-        )
+        name = html.escape(str(r.get("name") or ""))
+        prob_html = html.escape(prob_path)
+        main_cells = [f'<td class="stock-name"><span class="stock-toggle" onclick="toggleProb({i})">{name}</span></td>']
+        main_cells += [f"<td>{html.escape(str(v))}</td>" for v in cells]
+        rows.append(f'<tr class="{cls}">' + "".join(main_cells) + "</tr>"
+                    f'<tr id="prob-{i}" class="prob-row"><td colspan="10"><b>各板晋级概率：</b>{prob_html}</td></tr>')
     generated = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     top_name = html.escape(str(candidates[0]["name"])) if candidates else "—"
     top_score = f"{candidates[0]['score']:.1%}" if candidates else "—"
@@ -221,6 +225,8 @@ th,td {{ padding:12px 10px; border-bottom:1px solid #e8edf5; text-align:left; wh
 tr:hover {{ background:#f8fbff; }} tr.top td {{ font-weight:600; }}
 tr.top td:nth-child(2) {{ color:#d97706; }} td:nth-child(6) {{ color:#2563eb; font-weight:700; }}
 .note {{ color:#64748b; font-size:13px; margin-top:14px; }}
+.stock-toggle {{ color:#d97706; font-weight:700; cursor:pointer; text-decoration:underline; text-decoration-style:dotted; }}
+.prob-row {{ display:none; background:#f8fbff; }} .prob-row td {{ color:#2563eb; font-size:13px; padding-top:7px; padding-bottom:7px; }}
 </style></head><body><main class="wrap">
 <section class="hero"><h1>千里 · 连板潜力筛选</h1>
 <div class="sub">{html.escape(date)}　|　生成时间：{generated}　|　按综合分从高到低排列</div>
@@ -232,12 +238,14 @@ tr.top td:nth-child(2) {{ color:#d97706; }} td:nth-child(6) {{ color:#2563eb; fo
 <th>预计高度</th><th>最强目标</th><th>换手率</th><th>题材/原因</th>
 </tr></thead><tbody>{''.join(rows)}</tbody></table>
 <div class="note">提示：这是模型排序结果，不是买入保证；重点结合题材持续性、封板质量和次日开盘情况人工复核。</div>
-</section></main></body></html>"""
+</section></main><script>
+function toggleProb(i) {{ const row=document.getElementById('prob-'+i); row.style.display=row.style.display==='table-row'?'none':'table-row'; }}
+</script></body></html>"""
     with open(path, "w", encoding="utf-8") as f:
         f.write(document)
 
 
-def main():
+def main(open_report=True):
     pool, kc, dates = load_data()
     model_path = os.path.join(HERE, "lianban_rolling_model.json")
     if not os.path.exists(model_path):
@@ -317,6 +325,9 @@ def main():
     print(f"结果已保存：{out_path}")
     print(f"可视化页面：{html_path}")
     print("说明：这是多目标连板潜力排序，不是买入保证；优先查看前5名的题材和盘口质量。")
+    # 无论从 VS Code 还是桌面启动，筛选完成后自动打开可视化结果。
+    if open_report:
+        webbrowser.open(Path(html_path).resolve().as_uri())
 
 
 if __name__ == "__main__":
